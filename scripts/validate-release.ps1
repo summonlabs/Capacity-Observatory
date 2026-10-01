@@ -29,8 +29,24 @@ function Assert-True([bool] $Condition, [string] $What) {
   }
 }
 
-$remoteUrl = (& git remote get-url $Remote).Trim()
-if ($LASTEXITCODE -ne 0 -or -not $remoteUrl) { throw "remote '$Remote' is not configured" }
+# Windows PowerShell turns a native command's stderr into a terminating error
+# when the preference is Stop, and git reports ordinary progress on stderr.
+# The exit code is the contract, so output is captured instead.
+function Invoke-Git([string[]] $Arguments) {
+  $savedPreference = $ErrorActionPreference
+  try {
+    $ErrorActionPreference = 'Continue'
+    $output = & git @Arguments 2>&1
+    $code = $LASTEXITCODE
+  } finally {
+    $ErrorActionPreference = $savedPreference
+  }
+  return [pscustomobject]@{ Output = ($output | Out-String).Trim(); ExitCode = $code }
+}
+
+$remoteResult = Invoke-Git @('remote', 'get-url', $Remote)
+$remoteUrl = $remoteResult.Output
+if ($remoteResult.ExitCode -ne 0 -or -not $remoteUrl) { throw "remote '$Remote' is not configured" }
 
 $work = [System.IO.Path]::GetFullPath($WorkDir)
 $clone = Join-Path $work 'Capacity-Observatory'
@@ -39,13 +55,14 @@ if (Test-Path -LiteralPath $work) { Remove-Item -LiteralPath $work -Recurse -For
 New-Item -ItemType Directory -Path $work | Out-Null
 
 Write-Step "Cloning $remoteUrl ($Ref) into $clone"
-& git clone --branch $Ref --single-branch $remoteUrl $clone 2>&1 | Write-Output
-if ($LASTEXITCODE -ne 0) { throw 'clone failed' }
+$cloneResult = Invoke-Git @('clone', '--branch', $Ref, '--single-branch', $remoteUrl, $clone)
+Write-Output $cloneResult.Output
+if ($cloneResult.ExitCode -ne 0) { throw 'clone failed' }
 
 Push-Location $clone
 try {
-  $head = (& git rev-parse HEAD).Trim()
-  $tagCommit = (& git rev-list -n 1 v1.0.0 2>&1).Trim()
+  $head = (Invoke-Git @('rev-parse', 'HEAD')).Output
+  $tagCommit = (Invoke-Git @('rev-list', '-n', '1', 'v1.0.0')).Output
   Write-Output "clone HEAD: $head"
   Write-Output "v1.0.0 dereferences to: $tagCommit"
   Assert-True ($head -eq $tagCommit) 'fresh clone HEAD equals the released tag commit'
