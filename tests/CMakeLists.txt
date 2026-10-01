@@ -1,0 +1,66 @@
+# Capacity Observatory test suites.
+
+add_library(co_test_main STATIC co_test_main.cpp)
+target_include_directories(co_test_main PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+target_link_libraries(co_test_main PUBLIC CapacityObservatory::capacity_observatory)
+
+if(MSVC)
+  target_compile_options(co_test_main PRIVATE /Zc:__cplusplus /permissive- /utf-8 /EHsc /W4)
+  if(CO_WARNINGS_AS_ERRORS)
+    target_compile_options(co_test_main PRIVATE /WX)
+  endif()
+  target_compile_definitions(co_test_main PRIVATE _CRT_SECURE_NO_WARNINGS NOMINMAX WIN32_LEAN_AND_MEAN)
+else()
+  target_compile_options(co_test_main PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Wshadow)
+  if(CO_WARNINGS_AS_ERRORS)
+    target_compile_options(co_test_main PRIVATE -Werror)
+  endif()
+endif()
+
+# co_add_test(<file-basename>) builds <name>.cpp as a suite and registers it.
+# No test carries a timeout: a hang is a defect to diagnose, not to time out.
+function(co_add_test name)
+  add_executable(${name} ${name}.cpp)
+  target_link_libraries(${name} PRIVATE co_test_main)
+  if(MSVC)
+    target_compile_options(${name} PRIVATE /Zc:__cplusplus /permissive- /utf-8 /EHsc /W4)
+    if(CO_WARNINGS_AS_ERRORS)
+      target_compile_options(${name} PRIVATE /WX)
+    endif()
+    target_compile_definitions(${name} PRIVATE _CRT_SECURE_NO_WARNINGS NOMINMAX WIN32_LEAN_AND_MEAN)
+    if(CO_ENABLE_ASAN)
+      target_compile_options(${name} PRIVATE /fsanitize=address /Zi)
+      target_link_options(${name} PRIVATE /fsanitize=address)
+    endif()
+  else()
+    target_compile_options(${name} PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Wshadow)
+    if(CO_WARNINGS_AS_ERRORS)
+      target_compile_options(${name} PRIVATE -Werror)
+    endif()
+  endif()
+  if(TARGET capacity-observatory)
+    target_compile_definitions(${name} PRIVATE CO_CLI_PATH="$<TARGET_FILE:capacity-observatory>")
+  endif()
+  add_test(NAME ${name} COMMAND ${name})
+  set_tests_properties(${name} PROPERTIES LABELS "unit")
+endfunction()
+
+co_add_test(test_concurrency)
+# The concurrency proof runs with the lock order auditor compiled in, so the
+# guards really do announce themselves while the suite hammers them.
+target_compile_definitions(test_concurrency PRIVATE CO_ENABLE_LOCK_AUDIT=1)
+co_add_test(test_foundations)
+co_add_test(test_json)
+co_add_test(test_store_persistence)
+co_add_test(test_store_failure_injection)
+# The end-to-end CLI suite needs the CLI binary: co_add_test defines CO_CLI_PATH
+# for a suite only when the capacity-observatory target exists, so a build with
+# -DCO_BUILD_CLI=OFF must not register this suite.
+if(TARGET capacity-observatory)
+  co_add_test(test_cli_e2e)
+endif()
+co_add_test(test_property_conservation)
+co_add_test(test_property_fragmentation)
+co_add_test(test_adversarial)
+co_add_test(test_store_multiprocess)
+co_add_test(test_restart_reopen)

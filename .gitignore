@@ -1,0 +1,27 @@
+# Build trees
+/build/
+/build-*/
+/out/
+/install/
+/stage/
+cmake-build-*/
+
+# IDE / editor
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.swp
+*~
+
+# Local scratch / validation residue
+/tmp/
+/.scratch/
+/validation-out/
+*.log
+*.tmp
+
+# Python caches used by helper scripts (if any)
+__pycache__/
+*.pyc
