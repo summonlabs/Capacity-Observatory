@@ -1,6 +1,6 @@
 # Capacity Observatory
 
-Facility-capacity observability for Summon Software Labs Data Center Control Plane (DCCP) deployments.
+Facility-capacity observability for facility deployments.
 
 Capacity Observatory answers one question, and answers it with evidence:
 
